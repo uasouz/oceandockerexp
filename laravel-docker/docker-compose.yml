@@ -1,0 +1,58 @@
+version: '2'
+
+networks:
+  network:
+    driver: bridge
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    networks:
+      - network
+    env_file:
+        - docker-compose.env
+
+  cron:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["/bin/sh", "-c", "env /bin/bash -o posix -c 'export -p' > /etc/cron.d/project_env.sh && chmod +x /etc/cron.d/project_env.sh && crontab /etc/cron.d/artisan-schedule-run && cron && tail -f /var/log/cron.log"]
+    networks:
+        - network
+    env_file:
+        - docker-compose.env
+
+  worker:
+    depends_on:
+      - redis
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["php", "artisan", "queue:work"]
+    networks:
+        - network
+    env_file:
+        - docker-compose.env
+
+  nginx:
+    build:
+      context: .
+      dockerfile: Dockerfile-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    networks:
+      - network
+    links:
+        - app
+
+  redis:
+    image: redis
+    networks:
+      - network
+
+volumes:
+  dbdata:
+    driver: local
